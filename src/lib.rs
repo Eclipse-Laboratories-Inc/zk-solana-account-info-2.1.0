@@ -395,6 +395,81 @@ impl<'a> AsRef<AccountInfo<'a>> for AccountInfo<'a> {
     }
 }
 
+#[repr(C)]
+pub struct AccountInfoEbpfVM {
+    /// Public key of the account
+    pub key_vaddr: u64,
+    /// The lamports in the account.  Modifiable by programs.
+    pub lamports_vaddr: u64,
+    /// The data held in this account.  Modifiable by programs.
+    pub data_vaddr: u64,
+    /// Program that owns this account
+    pub owner_vaddr: u64,
+    /// The epoch at which this account will next owe rent
+    pub rent_epoch: u64,
+    /// Was the transaction signed by this account's public key?
+    pub is_signer: bool,
+    /// Is the account writable?
+    pub is_writable: bool,
+    /// This account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+}
+
+impl AccountInfoEbpfVM {
+    /// Given a pointer to a `Rc<RefCell<&'a mut u64>>` in the VM (64-bit),
+    /// returns the pointer to the inner `u64` in the VM.
+    pub fn lamports_vaddr_inner(&self) -> u64 {
+        // Each `Rc<RefCell<&'a mut u64>>` has layout roughly as follows:
+        // Rc {    <------ Given pointer here
+        //     RcBox {
+        //          strong_count  // size = 0x8, offset = 0x0 (on 64-bit)
+        //          weak_count    // size = 0x8, offset = 0x8 (on 64-bit)
+        //          value {
+        //              RefCell {
+        //                  borrow_flag  // size = 0x8, offset = 0x10 (on 64-bit)
+        //                  ptr          // size = 0x8, offset = 0x18 (on 64-bit) <------ We need this
+        //              }
+        //          }
+        //     }
+        // }
+        self.lamports_vaddr.saturating_add(0x18)
+    }
+
+    /// Given a pointer to a `Rc<RefCell<&'a mut [u64]>>` in the VM (64-bit),
+    /// returns the pointer to the inner `[u64]` in the VM.
+    pub fn data_vaddr_inner(&self) -> u64 {
+        // Each `Rc<RefCell<&'a mut [u64]>>` has layout roughly as follows:
+        // Rc {    <------ Given pointer here
+        //     RcBox {
+        //          strong_count  // size = 0x8, offset = 0x0 (on 64-bit)
+        //          weak_count    // size = 0x8, offset = 0x8 (on 64-bit)
+        //          value {
+        //              RefCell {
+        //                  borrow_flag  // size = 0x8, offset = 0x10 (on 64-bit)
+        //                  ptr          // size = 0x8, offset = 0x18 (on 64-bit) <------ We need this
+        //              }
+        //          }
+        //     }
+        // }
+        self.data_vaddr.saturating_add(0x18)
+    }
+}
+
+impl std::fmt::Debug for AccountInfoEbpfVM {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccountInfoEbpfVM")
+            .field("key", &format!("0x{:X}", self.key_vaddr))
+            .field("lamports", &format!("0x{:X}", self.lamports_vaddr))
+            .field("data", &format!("0x{:X}", self.data_vaddr))
+            .field("owner", &format!("0x{:X}", self.owner_vaddr))
+            .field("rent_epoch", &self.rent_epoch)
+            .field("is_signer", &self.is_signer)
+            .field("is_writable", &self.is_writable)
+            .field("executable", &self.executable)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
