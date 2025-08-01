@@ -1,4 +1,5 @@
 //! Account information.
+#![allow(mismatched_lifetime_syntaxes)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 use {
     solana_program_error::ProgramError,
